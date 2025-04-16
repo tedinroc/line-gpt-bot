@@ -2,12 +2,9 @@ import os
 import openai
 import redis
 from flask import Flask, request, abort
-from linebot.v3.webhook import WebhookHandler
-from linebot.v3.messaging import (
-    MessagingApi, Configuration, ReplyMessageRequest, TextMessage as V3TextMessage
-)
-from linebot.v3.exceptions import InvalidSignatureError
-from linebot.v3.webhooks import MessageEvent, TextMessageContent, ImageMessageContent
+from linebot import LineBotApi, WebhookHandler
+from linebot.exceptions import InvalidSignatureError
+from linebot.models import MessageEvent, TextMessage, ImageMessage, TextSendMessage
 from PIL import Image
 import requests
 from io import BytesIO
@@ -21,8 +18,7 @@ app = Flask(__name__)
 # Line Bot 設定
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
-configuration = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)
-messaging_api = MessagingApi(configuration)
+line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
 # OpenAI 設定
@@ -44,10 +40,8 @@ def save_history(user_id, history):
     r.set(user_id, history, ex=3600)  # 保留1小時
 
 # 文字訊息處理
-@handler.add(MessageEvent)
+@handler.add(MessageEvent, message=TextMessage)
 def handle_text_message(event):
-    if not isinstance(event.message, TextMessageContent):
-        return
     user_id = event.source.user_id
     user_text = event.message.text
     print(f"[LOG] 收到來自 {user_id} 的文字訊息: {user_text}")
@@ -66,33 +60,27 @@ def handle_text_message(event):
         # 儲存對話歷史
         new_history = history + f"\nUser: {user_text}\nAI: {ai_reply}"
         save_history(user_id, new_history)
-        messaging_api.reply_message(
-            ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[V3TextMessage(text=ai_reply)]
-            )
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=ai_reply)
         )
     except Exception as e:
         print(f"[ERROR] 文字訊息處理失敗: {e}")
-        messaging_api.reply_message(
-            ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[V3TextMessage(text="發生錯誤，請稍後再試。")] 
-            )
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="發生錯誤，請稍後再試。")
         )
 
 # 圖片訊息處理
-@handler.add(MessageEvent)
+@handler.add(MessageEvent, message=ImageMessage)
 def handle_image_message(event):
-    if not isinstance(event.message, ImageMessageContent):
-        return
     user_id = event.source.user_id
     message_id = event.message.id
     print(f"[LOG] 收到來自 {user_id} 的圖片訊息，ID: {message_id}")
     try:
-        # 取得圖片內容（新版直接傳 message_id）
-        message_content = messaging_api.get_message_content(message_id)
-        img = Image.open(BytesIO(message_content.body))
+        # 取得圖片內容
+        message_content = line_bot_api.get_message_content(message_id)
+        img = Image.open(BytesIO(message_content.content))
         # 將圖片轉為 bytes
         buffered = BytesIO()
         img.save(buffered, format="JPEG")
@@ -116,19 +104,15 @@ def handle_image_message(event):
         history = get_history(user_id)
         new_history = history + f"\nUser: [圖片]\nAI: {ai_reply}"
         save_history(user_id, new_history)
-        messaging_api.reply_message(
-            ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[V3TextMessage(text=ai_reply)]
-            )
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=ai_reply)
         )
     except Exception as e:
         print(f"[ERROR] 圖片訊息處理失敗: {e}")
-        messaging_api.reply_message(
-            ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[V3TextMessage(text="圖片分析失敗，請稍後再試。")]
-            )
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="圖片分析失敗，請稍後再試。")
         )
 
 @app.route("/callback", methods=['POST'])

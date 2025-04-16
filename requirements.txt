@@ -1,5 +1,5 @@
 flask
-line-bot-sdk==3.4.0
+line-bot-sdk==2.4.2
 openai
 python-dotenv
 redis
