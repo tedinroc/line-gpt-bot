@@ -3,9 +3,11 @@ import openai
 import redis
 from flask import Flask, request, abort
 from linebot.v3.webhook import WebhookHandler
-from linebot.v3.messaging import MessagingApi, Configuration, ReplyMessageRequest, TextMessage as V3TextMessage
+from linebot.v3.messaging import (
+    MessagingApi, Configuration, ReplyMessageRequest, TextMessage as V3TextMessage, GetMessageContentRequest
+)
 from linebot.v3.exceptions import InvalidSignatureError
-from linebot.v3.webhook.models import MessageEvent, TextMessage, ImageMessage
+from linebot.v3.webhooks import MessageEvent, TextMessageContent, ImageMessageContent
 from PIL import Image
 import requests
 from io import BytesIO
@@ -42,8 +44,10 @@ def save_history(user_id, history):
     r.set(user_id, history, ex=3600)  # 保留1小時
 
 # 文字訊息處理
-@handler.add(MessageEvent, message=TextMessage)
+@handler.add(MessageEvent)
 def handle_text_message(event):
+    if not isinstance(event.message, TextMessageContent):
+        return
     user_id = event.source.user_id
     user_text = event.message.text
     history = get_history(user_id)
@@ -74,14 +78,16 @@ def handle_text_message(event):
         )
 
 # 圖片訊息處理
-@handler.add(MessageEvent, message=ImageMessage)
+@handler.add(MessageEvent)
 def handle_image_message(event):
+    if not isinstance(event.message, ImageMessageContent):
+        return
     user_id = event.source.user_id
     message_id = event.message.id
     try:
-        # 取得圖片內容
-        message_content = messaging_api.get_message_content(message_id)
-        img = Image.open(BytesIO(message_content.content))
+        # 取得圖片內容（新版需用 GetMessageContentRequest）
+        message_content = messaging_api.get_message_content(GetMessageContentRequest(message_id=message_id))
+        img = Image.open(BytesIO(message_content.body))
         # 將圖片轉為 bytes
         buffered = BytesIO()
         img.save(buffered, format="JPEG")
