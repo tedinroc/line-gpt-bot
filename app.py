@@ -117,7 +117,8 @@ def handle_image_message(event):
 
 @app.route("/callback", methods=['POST'])
 def callback():
-    signature = request.headers['X-Line-Signature']
+    print("[LOG] 收到 callback 請求")
+    signature = request.headers.get('X-Line-Signature', '')
     body = request.get_data(as_text=True)
     print(f"[LOG] 收到 callback 請求: {body}")
     try:
@@ -125,6 +126,8 @@ def callback():
     except InvalidSignatureError:
         print("[ERROR] LINE 簽名驗證失敗")
         abort(400)
+    except Exception as e:
+        print(f"[ERROR] callback 發生例外: {e}")
     return 'OK'
 
 if __name__ == "__main__":
