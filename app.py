@@ -2,9 +2,10 @@ import os
 import openai
 import redis
 from flask import Flask, request, abort
-from linebot import LineBotApi, WebhookHandler
-from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, ImageMessage, TextSendMessage
+from linebot.v3.webhook import WebhookHandler
+from linebot.v3.messaging import MessagingApi, Configuration, ReplyMessageRequest, TextMessage as V3TextMessage
+from linebot.v3.exceptions import InvalidSignatureError
+from linebot.v3.webhook.models import MessageEvent, TextMessage, ImageMessage
 from PIL import Image
 import requests
 from io import BytesIO
@@ -18,7 +19,8 @@ app = Flask(__name__)
 # Line Bot 設定
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
-line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
+configuration = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)
+messaging_api = MessagingApi(configuration)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
 # OpenAI 設定
@@ -57,14 +59,18 @@ def handle_text_message(event):
         # 儲存對話歷史
         new_history = history + f"\nUser: {user_text}\nAI: {ai_reply}"
         save_history(user_id, new_history)
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=ai_reply)
+        messaging_api.reply_message(
+            ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[V3TextMessage(text=ai_reply)]
+            )
         )
     except Exception as e:
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text="發生錯誤，請稍後再試。")
+        messaging_api.reply_message(
+            ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[V3TextMessage(text="發生錯誤，請稍後再試。")] 
+            )
         )
 
 # 圖片訊息處理
@@ -74,7 +80,7 @@ def handle_image_message(event):
     message_id = event.message.id
     try:
         # 取得圖片內容
-        message_content = line_bot_api.get_message_content(message_id)
+        message_content = messaging_api.get_message_content(message_id)
         img = Image.open(BytesIO(message_content.content))
         # 將圖片轉為 bytes
         buffered = BytesIO()
@@ -97,14 +103,18 @@ def handle_image_message(event):
         history = get_history(user_id)
         new_history = history + f"\nUser: [圖片]\nAI: {ai_reply}"
         save_history(user_id, new_history)
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=ai_reply)
+        messaging_api.reply_message(
+            ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[V3TextMessage(text=ai_reply)]
+            )
         )
     except Exception as e:
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text="圖片分析失敗，請稍後再試。")
+        messaging_api.reply_message(
+            ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[V3TextMessage(text="圖片分析失敗，請稍後再試。")]
+            )
         )
 
 @app.route("/callback", methods=['POST'])
