@@ -50,7 +50,9 @@ def handle_text_message(event):
         return
     user_id = event.source.user_id
     user_text = event.message.text
+    print(f"[LOG] 收到來自 {user_id} 的文字訊息: {user_text}")
     history = get_history(user_id)
+    print(f"[LOG] 歷史紀錄: {history}")
     prompt = history + f"\nUser: {user_text}\nAI:"
     try:
         response = openai.ChatCompletion.create(
@@ -60,6 +62,7 @@ def handle_text_message(event):
             max_tokens=500
         )
         ai_reply = response.choices[0].message["content"].strip()
+        print(f"[LOG] GPT 回應: {ai_reply}")
         # 儲存對話歷史
         new_history = history + f"\nUser: {user_text}\nAI: {ai_reply}"
         save_history(user_id, new_history)
@@ -70,6 +73,7 @@ def handle_text_message(event):
             )
         )
     except Exception as e:
+        print(f"[ERROR] 文字訊息處理失敗: {e}")
         messaging_api.reply_message(
             ReplyMessageRequest(
                 reply_token=event.reply_token,
@@ -84,6 +88,7 @@ def handle_image_message(event):
         return
     user_id = event.source.user_id
     message_id = event.message.id
+    print(f"[LOG] 收到來自 {user_id} 的圖片訊息，ID: {message_id}")
     try:
         # 取得圖片內容（新版直接傳 message_id）
         message_content = messaging_api.get_message_content(message_id)
@@ -92,6 +97,7 @@ def handle_image_message(event):
         buffered = BytesIO()
         img.save(buffered, format="JPEG")
         img_bytes = buffered.getvalue()
+        print(f"[LOG] 圖片已成功取得並轉換為 bytes，準備送給 GPT 分析")
         # 呼叫 OpenAI Vision API
         response = openai.ChatCompletion.create(
             model="gpt-4-vision-preview",
@@ -105,6 +111,7 @@ def handle_image_message(event):
             max_tokens=500
         )
         ai_reply = response.choices[0].message["content"].strip()
+        print(f"[LOG] GPT 圖片分析回應: {ai_reply}")
         # 儲存對話歷史
         history = get_history(user_id)
         new_history = history + f"\nUser: [圖片]\nAI: {ai_reply}"
@@ -116,6 +123,7 @@ def handle_image_message(event):
             )
         )
     except Exception as e:
+        print(f"[ERROR] 圖片訊息處理失敗: {e}")
         messaging_api.reply_message(
             ReplyMessageRequest(
                 reply_token=event.reply_token,
@@ -127,9 +135,11 @@ def handle_image_message(event):
 def callback():
     signature = request.headers['X-Line-Signature']
     body = request.get_data(as_text=True)
+    print(f"[LOG] 收到 callback 請求: {body}")
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
+        print("[ERROR] LINE 簽名驗證失敗")
         abort(400)
     return 'OK'
 
