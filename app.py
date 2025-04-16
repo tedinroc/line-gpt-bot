@@ -4,7 +4,7 @@ import redis
 from flask import Flask, request, abort
 from linebot.v3.webhook import WebhookHandler
 from linebot.v3.messaging import (
-    MessagingApi, Configuration, ReplyMessageRequest, TextMessage as V3TextMessage, GetMessageContentRequest
+    MessagingApi, Configuration, ReplyMessageRequest, TextMessage as V3TextMessage
 )
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.webhooks import MessageEvent, TextMessageContent, ImageMessageContent
@@ -85,8 +85,8 @@ def handle_image_message(event):
     user_id = event.source.user_id
     message_id = event.message.id
     try:
-        # 取得圖片內容（新版需用 GetMessageContentRequest）
-        message_content = messaging_api.get_message_content(GetMessageContentRequest(message_id=message_id))
+        # 取得圖片內容（新版直接傳 message_id）
+        message_content = messaging_api.get_message_content(message_id)
         img = Image.open(BytesIO(message_content.body))
         # 將圖片轉為 bytes
         buffered = BytesIO()
